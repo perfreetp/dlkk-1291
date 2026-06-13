@@ -11,7 +11,7 @@ import { users } from '@/data/mockData';
 export default function BlockManagement() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { blocks, addBlock, removeBlock, isBlocked } = useBlockStore();
+  const { blocks, addBlock, removeBlock, isBlocked, restoreHiddenNotifications } = useBlockStore();
   const { notifications } = useNotificationStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -50,8 +50,13 @@ export default function BlockManagement() {
   };
 
   const handleRemoveBlock = (blockId: string) => {
-    if (window.confirm('确定要取消屏蔽吗？取消屏蔽后，之前未读的提醒会按原来的已读状态恢复。')) {
+    const block = blocks.find((b) => b.id === blockId);
+    const hiddenIds = block?.hiddenNotificationIds || [];
+    if (window.confirm('确定要取消屏蔽吗？取消屏蔽后，之前未读的提醒会按原来的未读状态恢复。')) {
       removeBlock(blockId);
+      if (hiddenIds.length > 0) {
+        restoreHiddenNotifications(user!.id, hiddenIds);
+      }
     }
   };
 

@@ -2,15 +2,17 @@ import { Link, useLocation } from 'react-router-dom';
 import { Home, Briefcase, Users, Bell, User, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotificationStore } from '@/stores/dataStore';
+import { useNotificationStore, useBlockStore } from '@/stores/dataStore';
 
 export default function Header() {
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuthStore();
   const { getUnreadCountByUser } = useNotificationStore();
+  const { getBlockedUserIds } = useBlockStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  const unreadCount = isAuthenticated && user ? getUnreadCountByUser(user.id) : 0;
+  const blockedUserIds = isAuthenticated && user ? getBlockedUserIds(user.id) : [];
+  const unreadCount = isAuthenticated && user ? getUnreadCountByUser(user.id, blockedUserIds) : 0;
 
   const navItems = [
     { path: '/', label: '首页', icon: Home },

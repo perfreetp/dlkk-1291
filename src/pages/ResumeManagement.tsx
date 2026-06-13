@@ -11,11 +11,15 @@ import { useAuthStore } from '@/stores/authStore';
 export default function ResumeManagement() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { resumes, addResume, updateResume, deleteResume } = useReferralStore();
+  const { resumes, addResume, updateResume, deleteResume, isResumeValid } = useReferralStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newResumeTitle, setNewResumeTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  const isValidFile = (file: File) => validTypes.includes(file.type);
 
   if (!isAuthenticated) {
     return (
@@ -34,34 +38,41 @@ export default function ResumeManagement() {
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-      if (validTypes.includes(file.type)) {
+      if (isValidFile(file)) {
         setSelectedFile(file);
+        setFileError(null);
         if (!newResumeTitle) {
           const fileName = file.name.replace(/\.[^/.]+$/, '');
           setNewResumeTitle(fileName);
         }
       } else {
-        alert('请选择 PDF 或 Word 文件');
+        setSelectedFile(null);
+        setFileError('请选择 PDF 或 Word 文件');
       }
     }
   };
 
   const handleAddResume = () => {
-    if (!newResumeTitle.trim()) return;
+    if (!newResumeTitle.trim() || !selectedFile) return;
+
+    if (!isValidFile(selectedFile)) {
+      setFileError('请选择 PDF 或 Word 文件');
+      return;
+    }
 
     addResume({
       userId: user!.id,
       title: newResumeTitle,
-      fileUrl: selectedFile ? URL.createObjectURL(selectedFile) : `/resumes/${user!.id}/${Date.now()}.pdf`,
-      fileName: selectedFile?.name,
-      fileSize: selectedFile?.size,
-      fileType: selectedFile?.type,
+      fileUrl: URL.createObjectURL(selectedFile),
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      fileType: selectedFile.type,
       isDefault: userResumes.length === 0,
     });
 
     setNewResumeTitle('');
     setSelectedFile(null);
+    setFileError(null);
     setShowAddModal(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -153,11 +164,13 @@ export default function ResumeManagement() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {userResumes.map((resume) => (
+            {userResumes.map((resume) => {
+              const isValid = isResumeValid(resume.id);
+              return (
               <Card key={resume.id} className="p-5">
                 <div className="flex items-start gap-4">
                   <div className="p-3 bg-gray-100 rounded-lg flex-shrink-0">
-                    <FileText className="w-6 h-6 text-gray-600" />
+                    <FileText className={`w-6 h-6 ${isValid ? 'text-gray-600' : 'text-red-400'}`} />
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -174,6 +187,11 @@ export default function ResumeManagement() {
                           {getFileExtension(resume.fileType)}
                         </Badge>
                       )}
+                      {!isValid && (
+                        <Badge variant="danger" size="sm">
+                          文件失效
+                        </Badge>
+                      )}
                     </div>
                     
                     <div className="text-sm text-gray-500 space-y-0.5">
@@ -188,7 +206,7 @@ export default function ResumeManagement() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {resume.fileUrl && (
+                    {isValid && resume.fileUrl && (
                       <>
                         <Button
                           variant="ghost"
@@ -213,7 +231,7 @@ export default function ResumeManagement() {
                         </Button>
                       </>
                     )}
-                    {!resume.isDefault && (
+                    {!resume.isDefault && isValid && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -234,7 +252,8 @@ export default function ResumeManagement() {
                   </div>
                 </div>
               </Card>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -280,8 +299,13 @@ export default function ResumeManagement() {
                     </>
                   )}
                 </div>
-                <p className="mt-1.5 text-xs text-gray-400">支持 PDF、Word 格式，最大 10MB</p>
-              </div>
+                {fileError && (
+                    <p className="mt-1.5 text-xs text-red-500">{fileError}</p>
+                  )}
+                  {!fileError && (
+                    <p className="mt-1.5 text-xs text-gray-400">支持 PDF、Word 格式，最大 10MB</p>
+                  )}
+                </div>
 
               <div className="flex gap-3">
                 <Button variant="outline" className="flex-1" onClick={() => {

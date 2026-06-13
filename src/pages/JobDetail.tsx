@@ -7,14 +7,15 @@ import Button from '@/components/common/Button';
 import Textarea from '@/components/forms/Textarea';
 import { useReferralStore } from '@/stores/referralStore';
 import { useAuthStore } from '@/stores/authStore';
-import { useNotificationStore } from '@/stores/dataStore';
+import { useNotificationStore, useBlockStore } from '@/stores/dataStore';
 
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getReferralById, favorites, toggleFavorite, addApplication, resumes, hasApplied } = useReferralStore();
+  const { getReferralById, favorites, toggleFavorite, addApplication, resumes, hasApplied, getValidResumes, isResumeValid } = useReferralStore();
   const { user, isAuthenticated } = useAuthStore();
   const { addNotification } = useNotificationStore();
+  const { getBlockedUserIds } = useBlockStore();
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedResume, setSelectedResume] = useState('');
   const [scheduledTime, setScheduledTime] = useState('');
@@ -22,8 +23,9 @@ export default function JobDetail() {
   const [isApplied, setIsApplied] = useState(false);
 
   const referral = getReferralById(id || '');
+  const blockedUserIds = user ? getBlockedUserIds(user.id) : [];
 
-  if (!referral) {
+  if (!referral || (isAuthenticated && blockedUserIds.includes(referral.posterId))) {
     return (
       <div className="min-h-[calc(100vh-64px)] flex items-center justify-center">
         <Card className="p-8 text-center max-w-md">
@@ -38,7 +40,8 @@ export default function JobDetail() {
 
   const isFavorite = favorites.includes(referral.id);
   const userResumes = resumes.filter((r) => r.userId === user?.id);
-  const defaultResume = userResumes.find((r) => r.isDefault) || userResumes[0];
+  const validResumes = getValidResumes(user?.id || '');
+  const defaultResume = validResumes.find((r) => r.isDefault) || validResumes[0];
   const alreadyApplied = isAuthenticated && hasApplied(user!.id, referral.id);
 
   const formatDate = (dateStr: string) => {
@@ -84,20 +87,23 @@ export default function JobDetail() {
       navigate('/login');
       return;
     }
-    if (userResumes.length === 0) {
-      if (window.confirm('您还没有上传简历，请先上传简历再申请。是否前往简历管理？')) {
+    if (validResumes.length === 0) {
+      if (window.confirm('您还没有有效简历或简历文件已失效，请先上传简历再申请。是否前往简历管理？')) {
         navigate('/profile/resumes');
       }
       return;
     }
-    setSelectedResume(defaultResume?.id || userResumes[0].id);
+    setSelectedResume(defaultResume?.id || validResumes[0].id);
     setScheduledTime('');
     setNotes('');
     setShowApplyModal(true);
   };
 
   const handleSubmitApplication = () => {
-    if (!selectedResume) return;
+    if (!selectedResume || !isResumeValid(selectedResume)) {
+      alert('请选择有效简历');
+      return;
+    }
 
     addApplication({
       referralId: referral.id,
@@ -257,60 +263,79 @@ export default function JobDetail() {
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">选择简历</label>
                 <div className="space-y-2">
-                  {userResumes.map((resume) => (
-                    <label
-                      key={resume.id}
-                      className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                        selectedResume === resume.id
-                          ? 'border-[#1E3A5F] bg-[#1E3A5F]/5'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="resume"
-                        value={resume.id}
-                        checked={selectedResume === resume.id}
-                        onChange={(e) => setSelectedResume(e.target.value)}
-                        className="w-4 h-4 text-[#1E3A5F] mt-0.5"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <FileText className="w-4 h-4 text-gray-400" />
-                          <p className="font-medium text-gray-900">{resume.title}</p>
-                          {resume.isDefault && (
-                            <Badge variant="success" size="sm">默认</Badge>
+                  {validResumes.length === 0 ? (
+                    <div className="text-center py-6 text-gray-500">
+                      <FileText className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                      <p className="text-sm">暂无有效简历</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={() => {
+                          setShowApplyModal(false);
+                          navigate('/profile/resumes');
+                        }}
+                      >
+                        <Upload className="w-4 h-4 mr-1" />
+                        上传简历
+                      </Button>
+                    </div>
+                  ) : (
+                    validResumes.map((resume) => (
+                      <label
+                        key={resume.id}
+                        className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedResume === resume.id
+                            ? 'border-[#1E3A5F] bg-[#1E3A5F]/5'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="resume"
+                          value={resume.id}
+                          checked={selectedResume === resume.id}
+                          onChange={(e) => setSelectedResume(e.target.value)}
+                          className="w-4 h-4 text-[#1E3A5F] mt-0.5"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <FileText className="w-4 h-4 text-gray-400" />
+                            <p className="font-medium text-gray-900">{resume.title}</p>
+                            {resume.isDefault && (
+                              <Badge variant="success" size="sm">默认</Badge>
+                            )}
+                            {resume.fileType && (
+                              <Badge variant="default" size="sm">
+                                {getFileExtension(resume.fileType)}
+                              </Badge>
+                            )}
+                          </div>
+                          {resume.fileName && (
+                            <p className="text-sm text-gray-500">
+                              {resume.fileName}
+                              {resume.fileSize && ` · ${formatFileSize(resume.fileSize)}`}
+                            </p>
                           )}
-                          {resume.fileType && (
-                            <Badge variant="default" size="sm">
-                              {getFileExtension(resume.fileType)}
-                            </Badge>
+                          {resume.fileUrl && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  window.open(resume.fileUrl, '_blank');
+                                }}
+                                className="text-xs text-[#1E3A5F] hover:underline flex items-center gap-1"
+                              >
+                                <Download className="w-3 h-3" />
+                                预览
+                              </button>
+                            </div>
                           )}
                         </div>
-                        {resume.fileName && (
-                          <p className="text-sm text-gray-500">
-                            {resume.fileName}
-                            {resume.fileSize && ` · ${formatFileSize(resume.fileSize)}`}
-                          </p>
-                        )}
-                        {resume.fileUrl && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                window.open(resume.fileUrl, '_blank');
-                              }}
-                              className="text-xs text-[#1E3A5F] hover:underline flex items-center gap-1"
-                            >
-                              <Download className="w-3 h-3" />
-                              预览
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    ))
+                  )}
                 </div>
               </div>
 

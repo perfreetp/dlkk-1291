@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Referral, Application, Resume } from '@/types';
+import { Referral, Application, Resume, ApplicationStatus, StatusHistory } from '@/types';
 import { referrals as mockReferrals } from '@/data/mockData';
+import { useNotificationStore } from './dataStore';
 
 interface ReferralState {
   referrals: Referral[];
@@ -20,18 +21,21 @@ interface ReferralState {
   getFilteredReferrals: () => Referral[];
   getReferralById: (id: string) => Referral | undefined;
   getMyReferrals: (userId: string) => Referral[];
+  getReceivedApplications: (userId: string) => Application[];
   addReferral: (referral: Omit<Referral, 'id' | 'createdAt' | 'applicantCount' | 'status'>) => void;
   updateReferral: (id: string, data: Partial<Referral>) => void;
   deleteReferral: (id: string) => void;
   toggleFavorite: (referralId: string) => void;
-  addApplication: (application: Omit<Application, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => void;
-  updateApplication: (id: string, data: Partial<Application>) => void;
+  addApplication: (application: Omit<Application, 'id' | 'createdAt' | 'updatedAt' | 'status' | 'statusHistory'>) => void;
+  updateApplication: (id: string, data: Partial<Application>, note?: string) => void;
   cancelApplication: (id: string) => void;
   addResume: (resume: Omit<Resume, 'id' | 'createdAt'>) => void;
   updateResume: (id: string, data: Partial<Resume>) => void;
   deleteResume: (id: string) => void;
   getDefaultResume: (userId: string) => Resume | undefined;
+  getValidResumes: (userId: string) => Resume[];
   hasApplied: (userId: string, referralId: string) => boolean;
+  isResumeValid: (resumeId: string) => boolean;
 }
 
 const initialFilters = {
@@ -40,6 +44,17 @@ const initialFilters = {
   grade: null as number | null,
   major: '',
   keyword: '',
+};
+
+const isValidResume = (resume: Resume): boolean => {
+  if (!resume.fileUrl) return false;
+  if (resume.fileUrl.startsWith('blob:')) return true;
+  if (!resume.fileName) return false;
+  const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+  return validTypes.includes(resume.fileType || '') || 
+         resume.fileUrl.includes('.pdf') || 
+         resume.fileUrl.includes('.doc') || 
+         resume.fileUrl.includes('.docx');
 };
 
 export const useReferralStore = create<ReferralState>()(
@@ -90,6 +105,12 @@ export const useReferralStore = create<ReferralState>()(
         return get().referrals.filter((r) => r.posterId === userId);
       },
 
+      getReceivedApplications: (userId) => {
+        const userReferrals = get().referrals.filter((r) => r.posterId === userId);
+        const referralIds = userReferrals.map((r) => r.id);
+        return get().applications.filter((a) => referralIds.includes(a.referralId));
+      },
+
       addReferral: (data) => {
         const newReferral: Referral = {
           ...data,
@@ -130,13 +151,17 @@ export const useReferralStore = create<ReferralState>()(
 
       addApplication: (data) => {
         const referral = get().referrals.find((r) => r.id === data.referralId);
+        const resume = get().resumes.find((r) => r.id === data.resumeId);
+        const now = new Date().toISOString();
         const newApplication: Application = {
           ...data,
           referral: referral,
+          resume: resume,
           id: Date.now().toString(),
           status: 'pending',
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
+          statusHistory: [{ status: 'pending', timestamp: now }],
         };
         set((state) => ({
           applications: [newApplication, ...state.applications],
@@ -148,12 +173,62 @@ export const useReferralStore = create<ReferralState>()(
         }));
       },
 
-      updateApplication: (id, data) => {
+      updateApplication: (id, data, note) => {
+        const state = get();
+        const application = state.applications.find((a) => a.id === id);
+        if (!application) return;
+
+        const oldStatus = application.status;
+        const newStatus = data.status as ApplicationStatus;
+        const now = new Date().toISOString();
+
+        const statusHistory: StatusHistory = { status: newStatus, timestamp: now };
+        if (note) statusHistory.note = note;
+
+        const updatedHistory = [...application.statusHistory, statusHistory];
+
         set((state) => ({
           applications: state.applications.map((a) =>
-            a.id === id ? { ...a, ...data, updatedAt: new Date().toISOString() } : a
+            a.id === id
+              ? { ...a, ...data, updatedAt: now, statusHistory: updatedHistory }
+              : a
           ),
         }));
+
+        if (newStatus !== oldStatus && data.status) {
+          const notificationStore = useNotificationStore.getState();
+          let notificationTitle = '';
+          let notificationContent = '';
+
+          switch (newStatus) {
+            case 'viewed':
+              notificationTitle = '简历已被查看';
+              notificationContent = `推荐人已查看您投递「${application.referral?.jobTitle}」的简历`;
+              break;
+            case 'recommended':
+              notificationTitle = '内推成功';
+              notificationContent = `您的申请「${application.referral?.jobTitle}」已被推荐给HR，请保持手机畅通！`;
+              break;
+            case 'rejected':
+              notificationTitle = '申请被婉拒';
+              notificationContent = `您的申请「${application.referral?.jobTitle}」未被通过，您可以尝试其他岗位`;
+              break;
+            case 'completed':
+              notificationTitle = '招聘流程完成';
+              notificationContent = `恭喜！您投递的「${application.referral?.jobTitle}」已进入下一环节`;
+              break;
+          }
+
+          if (notificationTitle) {
+            notificationStore.addNotification({
+              userId: application.applicantId,
+              type: 'application',
+              title: notificationTitle,
+              content: notificationContent,
+              link: '/applications',
+            });
+          }
+        }
       },
 
       cancelApplication: (id) => {
@@ -196,13 +271,23 @@ export const useReferralStore = create<ReferralState>()(
       },
 
       getDefaultResume: (userId) => {
-        return get().resumes.find((r) => r.userId === userId && r.isDefault);
+        const resumes = get().resumes.filter((r) => r.userId === userId);
+        return resumes.find((r) => r.isDefault && isValidResume(r)) || resumes.find((r) => isValidResume(r));
+      },
+
+      getValidResumes: (userId) => {
+        return get().resumes.filter((r) => r.userId === userId && isValidResume(r));
       },
 
       hasApplied: (userId, referralId) => {
         return get().applications.some(
           (a) => a.applicantId === userId && a.referralId === referralId
         );
+      },
+
+      isResumeValid: (resumeId) => {
+        const resume = get().resumes.find((r) => r.id === resumeId);
+        return resume ? isValidResume(resume) : false;
       },
     }),
     {

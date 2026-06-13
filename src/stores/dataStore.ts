@@ -153,6 +153,8 @@ interface BlockState {
   isBlocked: (userId: string, blockedUserId: string) => boolean;
   getBlocksByUser: (userId: string) => Block[];
   getBlockedUserIds: (userId: string) => string[];
+  getHiddenNotificationIds: (userId: string) => string[];
+  restoreHiddenNotifications: (userId: string, hiddenIds: string[]) => void;
 }
 
 export const useBlockStore = create<BlockState>()(
@@ -195,6 +197,20 @@ export const useBlockStore = create<BlockState>()(
 
       getBlockedUserIds: (userId) => {
         return get().blocks.filter((b) => b.userId === userId).map((b) => b.blockedUserId);
+      },
+
+      getHiddenNotificationIds: (userId) => {
+        return get().blocks
+          .filter((b) => b.userId === userId)
+          .flatMap((b) => b.hiddenNotificationIds || []);
+      },
+
+      restoreHiddenNotifications: (userId, hiddenIds) => {
+        useNotificationStore.setState((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.userId === userId && hiddenIds.includes(n.id) ? { ...n, isRead: false } : n
+          ),
+        }));
       },
     }),
     {

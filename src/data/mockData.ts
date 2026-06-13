@@ -467,6 +467,11 @@ export const applications: Application[] = [
     notes: '希望能够获得面试机会',
     createdAt: '2026-06-10T15:00:00Z',
     updatedAt: '2026-06-12T10:00:00Z',
+    statusHistory: [
+      { status: 'pending', timestamp: '2026-06-10T15:00:00Z' },
+      { status: 'viewed', timestamp: '2026-06-11T10:00:00Z' },
+      { status: 'recommended', timestamp: '2026-06-12T10:00:00Z' },
+    ],
   },
   {
     id: 'a2',
@@ -478,6 +483,9 @@ export const applications: Application[] = [
     notes: '您好，我对算法工程师岗位非常感兴趣',
     createdAt: '2026-06-11T09:00:00Z',
     updatedAt: '2026-06-11T09:00:00Z',
+    statusHistory: [
+      { status: 'pending', timestamp: '2026-06-11T09:00:00Z' },
+    ],
   },
   {
     id: 'a3',
@@ -489,6 +497,11 @@ export const applications: Application[] = [
     notes: '感谢您发布内推，我想申请这个岗位',
     createdAt: '2026-06-09T14:00:00Z',
     updatedAt: '2026-06-10T11:00:00Z',
+    statusHistory: [
+      { status: 'pending', timestamp: '2026-06-09T14:00:00Z' },
+      { status: 'viewed', timestamp: '2026-06-10T09:00:00Z' },
+      { status: 'rejected', timestamp: '2026-06-10T11:00:00Z' },
+    ],
   },
 ];
 

@@ -11,7 +11,7 @@ export default function Notifications() {
   const navigate = useNavigate();
   const { notifications, markAsRead, markAllAsRead, getNotificationsByUser, getUnreadCountByUser } = useNotificationStore();
   const { user, isAuthenticated } = useAuthStore();
-  const { getBlockedUserIds, getBlocksByUser } = useBlockStore();
+  const { getBlockedUserIds, getBlocksByUser, getHiddenNotificationIds, restoreHiddenNotifications } = useBlockStore();
   const [filter, setFilter] = useState<string>('all');
 
   if (!isAuthenticated) {
@@ -27,17 +27,9 @@ export default function Notifications() {
   }
 
   const blockedUserIds = getBlockedUserIds(user!.id);
-  const userBlocks = getBlocksByUser(user!.id);
-  const hiddenNotificationIds = userBlocks.flatMap((b) => b.hiddenNotificationIds);
+  const hiddenNotificationIds = getHiddenNotificationIds(user!.id);
 
-  const allUserNotifications = getNotificationsByUser(user!.id).filter((n) => {
-    if (n.userId === user!.id) {
-      const isFromBlockedUser = blockedUserIds.includes(n.userId);
-      return !isFromBlockedUser;
-    }
-    return false;
-  });
-
+  const allUserNotifications = getNotificationsByUser(user!.id, blockedUserIds);
   const visibleNotifications = allUserNotifications.filter((n) => !hiddenNotificationIds.includes(n.id));
 
   const filteredNotifications = filter === 'all'
@@ -49,7 +41,7 @@ export default function Notifications() {
         return true;
       });
 
-  const unreadCount = getUnreadCountByUser(user!.id);
+  const unreadCount = getUnreadCountByUser(user!.id, blockedUserIds);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -119,6 +111,10 @@ export default function Notifications() {
     markAllAsRead(user!.id);
   };
 
+  const handleRestoreNotifications = () => {
+    restoreHiddenNotifications(user!.id, hiddenNotificationIds);
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -133,6 +129,11 @@ export default function Notifications() {
             <Button variant="ghost" onClick={handleMarkAllAsRead}>
               <CheckCheck className="w-4 h-4 mr-2" />
               全部标为已读
+            </Button>
+          )}
+          {hiddenNotificationIds.length > 0 && (
+            <Button variant="ghost" onClick={handleRestoreNotifications} className="text-[#1E3A5F]">
+              恢复隐藏通知
             </Button>
           )}
         </div>

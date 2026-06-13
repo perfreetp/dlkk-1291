@@ -39,6 +39,14 @@ export interface Referral {
   createdAt: string;
 }
 
+export type ApplicationStatus = 'pending' | 'viewed' | 'recommended' | 'rejected' | 'completed';
+
+export interface StatusHistory {
+  status: ApplicationStatus;
+  timestamp: string;
+  note?: string;
+}
+
 export interface Application {
   id: string;
   referralId: string;
@@ -47,11 +55,12 @@ export interface Application {
   applicant?: User;
   resumeId: string;
   resume?: Resume;
-  status: 'pending' | 'recommended' | 'rejected' | 'completed';
+  status: ApplicationStatus;
   scheduledTime?: string;
   notes: string;
   createdAt: string;
   updatedAt: string;
+  statusHistory: StatusHistory[];
 }
 
 export interface Resume {

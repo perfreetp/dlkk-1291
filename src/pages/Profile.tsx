@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { User, FileText, Briefcase, Heart, Settings, Shield, ChevronRight, LogOut } from 'lucide-react';
+import { User, FileText, Briefcase, Heart, Settings, Shield, ChevronRight, LogOut, Inbox } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -9,7 +9,7 @@ import { useReferralStore } from '@/stores/referralStore';
 export default function Profile() {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
-  const { getMyReferrals, favorites } = useReferralStore();
+  const { getMyReferrals, favorites, getReceivedApplications } = useReferralStore();
 
   if (!user) {
     return (
@@ -24,6 +24,7 @@ export default function Profile() {
   }
 
   const myReferrals = getMyReferrals(user.id);
+  const receivedApps = getReceivedApplications(user.id);
 
   const menuItems = [
     {
@@ -53,6 +54,13 @@ export default function Profile() {
       description: `${favorites.length} 个收藏`,
       badge: null,
       onClick: () => navigate('/referrals'),
+    },
+    {
+      icon: Inbox,
+      title: '收到的申请',
+      description: `${receivedApps.length} 个候选人申请`,
+      badge: receivedApps.filter((a) => a.status === 'pending').length > 0 ? `${receivedApps.filter((a) => a.status === 'pending').length} 待处理` : null,
+      onClick: () => navigate('/profile/received'),
     },
     {
       icon: Settings,

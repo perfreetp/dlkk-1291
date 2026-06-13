@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Clock, CheckCircle, XCircle, Search, ArrowUpDown, FileText } from 'lucide-react';
+import { Briefcase, Clock, CheckCircle, XCircle, Search, ArrowUpDown, FileText, ChevronDown, ChevronUp, Eye } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -10,10 +10,11 @@ import { useReferralStore } from '@/stores/referralStore';
 export default function Applications() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { applications, cancelApplication, referrals, resumes } = useReferralStore();
+  const { applications, cancelApplication, referrals, resumes, updateApplication } = useReferralStore();
   const [filter, setFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'time' | 'scheduled'>('time');
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (!isAuthenticated) {
     return (
@@ -59,6 +60,7 @@ export default function Applications() {
 
   const statusConfig = {
     pending: { label: '待处理', color: 'warning', icon: Clock },
+    viewed: { label: '已查看', color: 'primary', icon: Eye },
     recommended: { label: '已推荐', color: 'success', icon: CheckCircle },
     rejected: { label: '已拒绝', color: 'danger', icon: XCircle },
     completed: { label: '已完成', color: 'default', icon: CheckCircle },
@@ -98,6 +100,10 @@ export default function Applications() {
     setSortBy((prev) => (prev === 'time' ? 'scheduled' : 'time'));
   };
 
+  const toggleExpand = (id: string) => {
+    setExpandedId(expandedId === id ? null : id);
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] py-8 px-4">
       <div className="max-w-4xl mx-auto">
@@ -127,6 +133,7 @@ export default function Applications() {
           {[
             { value: 'all', label: '全部' },
             { value: 'pending', label: '待处理' },
+            { value: 'viewed', label: '已查看' },
             { value: 'recommended', label: '已推荐' },
             { value: 'rejected', label: '已拒绝' },
             { value: 'completed', label: '已完成' },
@@ -167,80 +174,159 @@ export default function Applications() {
               const resume = application.resume;
               const status = statusConfig[application.status];
               const StatusIcon = status.icon;
+              const isExpanded = expandedId === application.id;
 
               return (
                 <Card
                   key={application.id}
-                  className="p-5"
+                  className="overflow-hidden"
                   style={{ opacity: 0, animation: `slideUp 0.3s ease-out ${0.05 * index}s forwards` }}
                 >
-                  <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                    <div className="flex items-center gap-4 flex-1">
-                      {referral && (
-                        <>
-                          <img
-                            src={referral.companyLogo}
-                            alt={referral.companyName}
-                            className="w-12 h-12 rounded-xl object-cover bg-gray-100 flex-shrink-0"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://via.placeholder.com/48?text=Logo';
-                            }}
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1 flex-wrap">
-                              <h3 className="font-semibold text-gray-900">{referral.jobTitle}</h3>
-                              <Badge variant={status.color as 'warning' | 'success' | 'danger' | 'default'}>
-                                <StatusIcon className="w-3 h-3 mr-1" />
-                                {status.label}
-                              </Badge>
+                  <div className="p-5">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                      <div className="flex items-center gap-4 flex-1">
+                        {referral && (
+                          <>
+                            <img
+                              src={referral.companyLogo}
+                              alt={referral.companyName}
+                              className="w-12 h-12 rounded-xl object-cover bg-gray-100 flex-shrink-0"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/48?text=Logo';
+                              }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                <h3 className="font-semibold text-gray-900">{referral.jobTitle}</h3>
+                                <Badge variant={status.color as 'warning' | 'success' | 'danger' | 'default' | 'primary'}>
+                                  <StatusIcon className="w-3 h-3 mr-1" />
+                                  {status.label}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-gray-500">{referral.companyName}</p>
+                              <p className="text-sm text-gray-400 mt-1">
+                                申请时间：{formatDate(application.createdAt)}
+                              </p>
                             </div>
-                            <p className="text-sm text-gray-500">{referral.companyName}</p>
-                            <p className="text-sm text-gray-400 mt-1">
-                              申请时间：{formatDate(application.createdAt)}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
+                          </>
+                        )}
+                      </div>
 
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      {application.status === 'pending' && (
-                        <Button variant="outline" size="sm" onClick={() => handleCancel(application.id)}>
-                          取消申请
+                      <div className="flex items-center gap-3 flex-shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpand(application.id)}
+                        >
+                          {isExpanded ? (
+                            <>
+                              收起详情
+                              <ChevronUp className="w-4 h-4 ml-1" />
+                            </>
+                          ) : (
+                            <>
+                              查看详情
+                              <ChevronDown className="w-4 h-4 ml-1" />
+                            </>
+                          )}
                         </Button>
-                      )}
-                      <Button variant="ghost" size="sm" onClick={() => navigate(`/referrals/${application.referralId}`)}>
-                        查看详情
-                      </Button>
+                        {application.status === 'pending' && (
+                          <Button variant="outline" size="sm" onClick={() => handleCancel(application.id)}>
+                            取消申请
+                          </Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => navigate(`/referrals/${application.referralId}`)}>
+                          岗位详情
+                        </Button>
+                      </div>
                     </div>
+
+                    {isExpanded && (
+                      <div className="mt-6 pt-6 border-t border-gray-100 space-y-6">
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-3">投递信息</h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                            <div className="flex items-start gap-3">
+                              <Briefcase className="w-4 h-4 text-gray-400 mt-0.5" />
+                              <div>
+                                <p className="text-gray-500">岗位</p>
+                                <p className="font-medium text-gray-900">{referral?.jobTitle}</p>
+                              </div>
+                            </div>
+                            <div className="flex items-start gap-3">
+                              <FileText className="w-4 h-4 text-gray-400 mt-0.5" />
+                              <div>
+                                <p className="text-gray-500">使用简历</p>
+                                <p className="font-medium text-gray-900">{resume?.title || '未找到简历'}</p>
+                                {resume?.fileType && (
+                                  <p className="text-xs text-gray-400">
+                                    {resume.fileName} {resume.fileSize && `(${formatFileSize(resume.fileSize)})`}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            {application.scheduledTime && (
+                              <div className="flex items-start gap-3">
+                                <Clock className="w-4 h-4 text-gray-400 mt-0.5" />
+                                <div>
+                                  <p className="text-gray-500">预约沟通时间</p>
+                                  <p className="font-medium text-[#1E3A5F]">{formatDate(application.scheduledTime)}</p>
+                                </div>
+                              </div>
+                            )}
+                            {application.notes && (
+                              <div className="flex items-start gap-3 md:col-span-2">
+                                <div className="w-4 h-4 mt-1">
+                                  <div className="w-1 h-1 bg-gray-400 rounded-full" />
+                                </div>
+                                <div>
+                                  <p className="text-gray-500">留言</p>
+                                  <p className="font-medium text-gray-900">{application.notes}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        <div>
+                          <h4 className="font-medium text-gray-900 mb-3">状态时间线</h4>
+                          <div className="relative pl-6 space-y-4">
+                            <div className="absolute left-[7px] top-2 bottom-2 w-0.5 bg-gray-200" />
+                            {application.statusHistory.map((history, idx) => {
+                              const historyStatus = statusConfig[history.status];
+                              const HistoryIcon = historyStatus.icon;
+                              return (
+                                <div key={idx} className="relative flex items-start gap-3">
+                                  <div className={`absolute left-0 w-4 h-4 rounded-full flex items-center justify-center ${
+                                    idx === application.statusHistory.length - 1
+                                      ? 'bg-[#1E3A5F] text-white'
+                                      : 'bg-gray-200 text-gray-500'
+                                  }`}>
+                                    <HistoryIcon className="w-2.5 h-2.5" />
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-medium ${
+                                        idx === application.statusHistory.length - 1 ? 'text-gray-900' : 'text-gray-500'
+                                      }`}>
+                                        {historyStatus.label}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-0.5">
+                                      {formatDate(history.timestamp)}
+                                    </p>
+                                    {history.note && (
+                                      <p className="text-sm text-gray-600 mt-1">{history.note}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-
-                  {application.scheduledTime && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-[#1E3A5F]">
-                      <Clock className="w-4 h-4" />
-                      预约沟通时间：{formatDate(application.scheduledTime)}
-                    </div>
-                  )}
-
-                  {resume && (
-                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-600">
-                      <FileText className="w-4 h-4" />
-                      使用简历：
-                      <span className="font-medium">{resume.title}</span>
-                      {resume.fileType && (
-                        <Badge variant="default" size="sm">{getFileExtension(resume.fileType)}</Badge>
-                      )}
-                      {resume.fileSize && (
-                        <span className="text-gray-400">({formatFileSize(resume.fileSize)})</span>
-                      )}
-                    </div>
-                  )}
-
-                  {application.notes && (
-                    <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-sm text-gray-500">留言：{application.notes}</p>
-                    </div>
-                  )}
                 </Card>
               );
             })}
