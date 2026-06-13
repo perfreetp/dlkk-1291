@@ -73,6 +73,7 @@ export interface Resume {
   fileType?: string;
   isDefault: boolean;
   createdAt: string;
+  base64Data?: string;
 }
 
 export interface Article {
@@ -105,6 +106,7 @@ export interface Notification {
   link?: string;
   isRead: boolean;
   createdAt: string;
+  relatedUserId?: string;
 }
 
 export interface Block {

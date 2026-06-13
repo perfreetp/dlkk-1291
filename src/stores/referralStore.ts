@@ -49,11 +49,12 @@ const initialFilters = {
 const isValidResume = (resume: Resume): boolean => {
   if (!resume.fileUrl) return false;
   if (resume.fileUrl.startsWith('blob:')) return true;
+  if (resume.base64Data) return true;
   if (!resume.fileName) return false;
   const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
-  return validTypes.includes(resume.fileType || '') || 
-         resume.fileUrl.includes('.pdf') || 
-         resume.fileUrl.includes('.doc') || 
+  return validTypes.includes(resume.fileType || '') ||
+         resume.fileUrl.includes('.pdf') ||
+         resume.fileUrl.includes('.doc') ||
          resume.fileUrl.includes('.docx');
 };
 
@@ -203,19 +204,27 @@ export const useReferralStore = create<ReferralState>()(
           switch (newStatus) {
             case 'viewed':
               notificationTitle = '简历已被查看';
-              notificationContent = `推荐人已查看您投递「${application.referral?.jobTitle}」的简历`;
+              notificationContent = note
+                ? `推荐人已查看您的简历：${note}`
+                : `推荐人已查看您投递「${application.referral?.jobTitle}」的简历`;
               break;
             case 'recommended':
               notificationTitle = '内推成功';
-              notificationContent = `您的申请「${application.referral?.jobTitle}」已被推荐给HR，请保持手机畅通！`;
+              notificationContent = note
+                ? `您的申请已被推荐：${note}`
+                : `您的申请「${application.referral?.jobTitle}」已被推荐给HR，请保持手机畅通！`;
               break;
             case 'rejected':
               notificationTitle = '申请被婉拒';
-              notificationContent = `您的申请「${application.referral?.jobTitle}」未被通过，您可以尝试其他岗位`;
+              notificationContent = note
+                ? `很遗憾，您的申请未通过：${note}`
+                : `您的申请「${application.referral?.jobTitle}」未被通过，您可以尝试其他岗位`;
               break;
             case 'completed':
               notificationTitle = '招聘流程完成';
-              notificationContent = `恭喜！您投递的「${application.referral?.jobTitle}」已进入下一环节`;
+              notificationContent = note
+                ? `您的申请已通过：${note}`
+                : `恭喜！您投递的「${application.referral?.jobTitle}」已进入下一环节`;
               break;
           }
 
@@ -226,6 +235,7 @@ export const useReferralStore = create<ReferralState>()(
               title: notificationTitle,
               content: notificationContent,
               link: '/applications',
+              relatedUserId: application.referral?.posterId,
             });
           }
         }

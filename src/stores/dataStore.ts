@@ -47,13 +47,13 @@ export const useNotificationStore = create<NotificationState>()(
 
       getNotificationsByUser: (userId, blockedUserIds = []) => {
         return get().notifications.filter(
-          (n) => n.userId === userId && !blockedUserIds.includes(n.userId)
+          (n) => n.userId === userId && (!n.relatedUserId || !blockedUserIds.includes(n.relatedUserId))
         );
       },
 
       getUnreadCountByUser: (userId, blockedUserIds = []) => {
         return get().notifications.filter(
-          (n) => n.userId === userId && !n.isRead && !blockedUserIds.includes(n.userId)
+          (n) => n.userId === userId && !n.isRead && (!n.relatedUserId || !blockedUserIds.includes(n.relatedUserId))
         ).length;
       },
     }),

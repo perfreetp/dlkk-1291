@@ -1,25 +1,66 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Star, Trash2, ArrowLeft, Download, Eye } from 'lucide-react';
+import { Upload, FileText, Star, Trash2, ArrowLeft, Download, Eye, RefreshCw } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
 import Input from '@/components/forms/Input';
 import { useReferralStore } from '@/stores/referralStore';
 import { useAuthStore } from '@/stores/authStore';
+import { Resume } from '@/types';
 
 export default function ResumeManagement() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const { resumes, addResume, updateResume, deleteResume, isResumeValid } = useReferralStore();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingResume, setEditingResume] = useState<Resume | null>(null);
   const [newResumeTitle, setNewResumeTitle] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
   const isValidFile = (file: File) => validTypes.includes(file.type);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
+
+  const fileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const base64ToBlobUrl = (base64: string, fileType: string): string => {
+    const byteCharacters = atob(base64.split(',')[1]);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: fileType });
+    return URL.createObjectURL(blob);
+  };
+
+  const getResumeUrl = (resume: Resume): string => {
+    if (resume.fileUrl.startsWith('blob:')) {
+      return resume.fileUrl;
+    }
+    if (resume.base64Data && resume.fileType) {
+      return base64ToBlobUrl(resume.base64Data, resume.fileType);
+    }
+    return resume.fileUrl;
+  };
 
   if (!isAuthenticated) {
     return (
@@ -41,18 +82,21 @@ export default function ResumeManagement() {
       if (isValidFile(file)) {
         setSelectedFile(file);
         setFileError(null);
+        const url = URL.createObjectURL(file);
+        setPreviewUrl(url);
         if (!newResumeTitle) {
           const fileName = file.name.replace(/\.[^/.]+$/, '');
           setNewResumeTitle(fileName);
         }
       } else {
         setSelectedFile(null);
+        setPreviewUrl(null);
         setFileError('请选择 PDF 或 Word 文件');
       }
     }
   };
 
-  const handleAddResume = () => {
+  const handleAddResume = async () => {
     if (!newResumeTitle.trim() || !selectedFile) return;
 
     if (!isValidFile(selectedFile)) {
@@ -60,20 +104,61 @@ export default function ResumeManagement() {
       return;
     }
 
-    addResume({
-      userId: user!.id,
-      title: newResumeTitle,
-      fileUrl: URL.createObjectURL(selectedFile),
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      fileType: selectedFile.type,
-      isDefault: userResumes.length === 0,
-    });
+    const base64Data = await fileToBase64(selectedFile);
+
+    if (editingResume) {
+      updateResume(editingResume.id, {
+        title: newResumeTitle,
+        fileUrl: URL.createObjectURL(selectedFile),
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type,
+        base64Data: base64Data,
+      });
+    } else {
+      addResume({
+        userId: user!.id,
+        title: newResumeTitle,
+        fileUrl: URL.createObjectURL(selectedFile),
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type,
+        isDefault: userResumes.length === 0,
+        base64Data: base64Data,
+      });
+    }
 
     setNewResumeTitle('');
     setSelectedFile(null);
     setFileError(null);
+    setPreviewUrl(null);
+    setEditingResume(null);
     setShowAddModal(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const handleEditResume = (resume: Resume) => {
+    setEditingResume(resume);
+    setNewResumeTitle(resume.title);
+    setSelectedFile(null);
+    setFileError(null);
+    const url = getResumeUrl(resume);
+    setPreviewUrl(url);
+    setShowAddModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowAddModal(false);
+    setEditingResume(null);
+    setNewResumeTitle('');
+    setSelectedFile(null);
+    setFileError(null);
+    if (previewUrl && previewUrl.startsWith('blob:') && !selectedFile) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -92,9 +177,9 @@ export default function ResumeManagement() {
   const handleDelete = (resumeId: string) => {
     const resumeToDelete = userResumes.find((r) => r.id === resumeId);
     const wasDefault = resumeToDelete?.isDefault;
-    
+
     deleteResume(resumeId);
-    
+
     if (wasDefault && userResumes.length > 1) {
       const remainingResumes = userResumes.filter((r) => r.id !== resumeId);
       if (remainingResumes.length > 0) {
@@ -104,6 +189,19 @@ export default function ResumeManagement() {
         updateResume(latestResume.id, { isDefault: true });
       }
     }
+  };
+
+  const handlePreview = (resume: Resume) => {
+    const url = getResumeUrl(resume);
+    window.open(url, '_blank');
+  };
+
+  const handleDownload = (resume: Resume) => {
+    const url = getResumeUrl(resume);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = resume.fileName || 'resume.pdf';
+    link.click();
   };
 
   const formatFileSize = (bytes?: number) => {
@@ -193,7 +291,7 @@ export default function ResumeManagement() {
                         </Badge>
                       )}
                     </div>
-                    
+
                     <div className="text-sm text-gray-500 space-y-0.5">
                       <p>上传时间：{formatDate(resume.createdAt)}</p>
                       {resume.fileName && (
@@ -206,13 +304,13 @@ export default function ResumeManagement() {
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {isValid && resume.fileUrl && (
+                    {isValid && (
                       <>
                         <Button
                           variant="ghost"
                           size="sm"
                           title="预览"
-                          onClick={() => window.open(resume.fileUrl, '_blank')}
+                          onClick={() => handlePreview(resume)}
                         >
                           <Eye className="w-4 h-4" />
                         </Button>
@@ -220,18 +318,21 @@ export default function ResumeManagement() {
                           variant="ghost"
                           size="sm"
                           title="下载"
-                          onClick={() => {
-                            const link = document.createElement('a');
-                            link.href = resume.fileUrl;
-                            link.download = resume.fileName || 'resume.pdf';
-                            link.click();
-                          }}
+                          onClick={() => handleDownload(resume)}
                         >
                           <Download className="w-4 h-4" />
                         </Button>
                       </>
                     )}
-                    {!resume.isDefault && isValid && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      title="重新上传"
+                      onClick={() => handleEditResume(resume)}
+                    >
+                      <RefreshCw className="w-4 h-4" />
+                    </Button>
+                    {!resume.isDefault && (
                       <Button
                         variant="ghost"
                         size="sm"
@@ -261,7 +362,9 @@ export default function ResumeManagement() {
       {showAddModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <Card className="w-full max-w-md p-6 animate-scale-in">
-            <h2 className="text-xl font-bold text-gray-900 mb-6">上传简历</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-6">
+              {editingResume ? '重新上传简历' : '上传简历'}
+            </h2>
 
             <div className="space-y-4">
               <Input
@@ -292,6 +395,14 @@ export default function ResumeManagement() {
                         <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
                       </div>
                     </div>
+                  ) : previewUrl ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="w-6 h-6 text-gray-400" />
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-gray-700">当前文件已选中</p>
+                        <p className="text-xs text-gray-500">点击可重新选择</p>
+                      </div>
+                    </div>
                   ) : (
                     <>
                       <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
@@ -299,24 +410,23 @@ export default function ResumeManagement() {
                     </>
                   )}
                 </div>
-                {fileError && (
+                {fileError ? (
                     <p className="mt-1.5 text-xs text-red-500">{fileError}</p>
-                  )}
-                  {!fileError && (
+                  ) : (
                     <p className="mt-1.5 text-xs text-gray-400">支持 PDF、Word 格式，最大 10MB</p>
                   )}
                 </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => {
-                  setShowAddModal(false);
-                  setNewResumeTitle('');
-                  setSelectedFile(null);
-                }}>
+                <Button variant="outline" className="flex-1" onClick={handleCloseModal}>
                   取消
                 </Button>
-                <Button className="flex-1" onClick={handleAddResume} disabled={!newResumeTitle.trim()}>
-                  上传
+                <Button
+                  className="flex-1"
+                  onClick={handleAddResume}
+                  disabled={!newResumeTitle.trim() || (!selectedFile && !editingResume)}
+                >
+                  {editingResume ? '保存' : '上传'}
                 </Button>
               </div>
             </div>

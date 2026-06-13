@@ -16,6 +16,7 @@ import Profile from '@/pages/Profile';
 import ResumeManagement from '@/pages/ResumeManagement';
 import BlockManagement from '@/pages/BlockManagement';
 import ReceivedApplications from '@/pages/ReceivedApplications';
+import ReceivedApplicationDetail from '@/pages/ReceivedApplicationDetail';
 
 export default function App() {
   return (
@@ -39,6 +40,7 @@ export default function App() {
             <Route path="/profile/resumes" element={<ResumeManagement />} />
             <Route path="/profile/blocks" element={<BlockManagement />} />
             <Route path="/profile/received" element={<ReceivedApplications />} />
+            <Route path="/profile/received/:id" element={<ReceivedApplicationDetail />} />
           </Routes>
         </main>
         <Footer />
