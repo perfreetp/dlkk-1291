@@ -59,6 +59,9 @@ export interface Resume {
   userId: string;
   title: string;
   fileUrl: string;
+  fileName?: string;
+  fileSize?: number;
+  fileType?: string;
   isDefault: boolean;
   createdAt: string;
 }
@@ -100,6 +103,7 @@ export interface Block {
   userId: string;
   blockedUserId: string;
   blockedUser?: User;
+  hiddenNotificationIds: string[];
   createdAt: string;
 }
 

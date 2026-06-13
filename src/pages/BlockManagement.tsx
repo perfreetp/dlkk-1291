@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, UserX, ArrowLeft, Check, X, Search } from 'lucide-react';
+import { Shield, UserX, ArrowLeft, X, Search } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
-import { useBlockStore } from '@/stores/dataStore';
+import { useBlockStore, useNotificationStore } from '@/stores/dataStore';
 import { useAuthStore } from '@/stores/authStore';
 import { users } from '@/data/mockData';
 
@@ -12,6 +12,7 @@ export default function BlockManagement() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
   const { blocks, addBlock, removeBlock, isBlocked } = useBlockStore();
+  const { notifications } = useNotificationStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -41,13 +42,15 @@ export default function BlockManagement() {
     : availableUsers;
 
   const handleBlockUser = (userId: string) => {
-    addBlock(user!.id, userId);
+    const userNotifications = notifications.filter((n) => n.userId === userId);
+    const notificationIds = userNotifications.map((n) => n.id);
+    addBlock(user!.id, userId, notificationIds);
     setShowAddModal(false);
     setSearchQuery('');
   };
 
   const handleRemoveBlock = (blockId: string) => {
-    if (window.confirm('确定要取消屏蔽吗？')) {
+    if (window.confirm('确定要取消屏蔽吗？取消屏蔽后，之前未读的提醒会按原来的已读状态恢复。')) {
       removeBlock(blockId);
     }
   };
@@ -78,6 +81,7 @@ export default function BlockManagement() {
           <Shield className="w-5 h-5 text-[#1E3A5F] mb-2" />
           <p className="text-sm text-gray-600">
             屏蔽某人后，您将不会收到该用户的内推信息。您的屏蔽行为对对方不可见。
+            取消屏蔽后，之前未读的通知将恢复显示。
           </p>
         </div>
 
@@ -103,6 +107,11 @@ export default function BlockManagement() {
                   <div className="flex-1">
                     <h3 className="font-medium text-gray-900">{block.blockedUser?.nickname || '未知用户'}</h3>
                     <p className="text-sm text-gray-500">{block.blockedUser?.email || '邮箱不可见'}</p>
+                    {block.hiddenNotificationIds && block.hiddenNotificationIds.length > 0 && (
+                      <p className="text-xs text-gray-400 mt-1">
+                        已隐藏 {block.hiddenNotificationIds.length} 条通知
+                      </p>
+                    )}
                   </div>
                   <Button
                     variant="ghost"

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Clock, CheckCircle, XCircle } from 'lucide-react';
+import { Briefcase, Clock, CheckCircle, XCircle, Search, ArrowUpDown, FileText } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -10,8 +10,10 @@ import { useReferralStore } from '@/stores/referralStore';
 export default function Applications() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { applications, cancelApplication, referrals } = useReferralStore();
+  const { applications, cancelApplication, referrals, resumes } = useReferralStore();
   const [filter, setFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'time' | 'scheduled'>('time');
 
   if (!isAuthenticated) {
     return (
@@ -25,12 +27,31 @@ export default function Applications() {
     );
   }
 
-  const userApplications = applications
+  let userApplications = applications
     .filter((app) => app.applicantId === user?.id)
     .map((app) => ({
       ...app,
       referral: app.referral || referrals.find((r) => r.id === app.referralId),
+      resume: resumes.find((r) => r.id === app.resumeId),
     }));
+
+  if (searchQuery) {
+    const query = searchQuery.toLowerCase();
+    userApplications = userApplications.filter((app) => {
+      const companyMatch = app.referral?.companyName.toLowerCase().includes(query);
+      const jobMatch = app.referral?.jobTitle.toLowerCase().includes(query);
+      return companyMatch || jobMatch;
+    });
+  }
+
+  userApplications.sort((a, b) => {
+    if (sortBy === 'scheduled') {
+      const aTime = a.scheduledTime ? new Date(a.scheduledTime).getTime() : 0;
+      const bTime = b.scheduledTime ? new Date(b.scheduledTime).getTime() : 0;
+      return bTime - aTime;
+    }
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 
   const filteredApplications = filter === 'all'
     ? userApplications
@@ -53,10 +74,28 @@ export default function Applications() {
     });
   };
 
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileExtension = (fileType?: string) => {
+    if (!fileType) return '';
+    if (fileType.includes('pdf')) return 'PDF';
+    if (fileType.includes('word') || fileType.includes('document')) return 'DOCX';
+    return '';
+  };
+
   const handleCancel = (id: string) => {
     if (window.confirm('确定要取消这个申请吗？')) {
       cancelApplication(id);
     }
+  };
+
+  const toggleSort = () => {
+    setSortBy((prev) => (prev === 'time' ? 'scheduled' : 'time'));
   };
 
   return (
@@ -65,6 +104,23 @@ export default function Applications() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">我的申请</h1>
           <p className="text-gray-500">跟踪您的内推申请状态</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+          <div className="flex-1 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              placeholder="搜索公司或岗位名称..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#1E3A5F] focus:ring-2 focus:ring-[#1E3A5F]/20 transition-colors text-gray-900"
+            />
+          </div>
+          <Button variant="outline" onClick={toggleSort}>
+            <ArrowUpDown className="w-4 h-4 mr-2" />
+            {sortBy === 'time' ? '按申请时间' : '按预约时间'}
+          </Button>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-6">
@@ -95,17 +151,20 @@ export default function Applications() {
               <Briefcase className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">
-              {filter === 'all' ? '暂无申请记录' : '暂无符合条件的申请'}
+              {searchQuery ? '没有找到匹配的申请' : filter === 'all' ? '暂无申请记录' : '暂无符合条件的申请'}
             </h3>
             <p className="text-gray-500 mb-6">
-              {filter === 'all' ? '去内推大厅寻找心仪的岗位吧' : '尝试选择其他筛选条件'}
+              {searchQuery ? '尝试其他关键词' : filter === 'all' ? '去内推大厅寻找心仪的岗位吧' : '尝试选择其他筛选条件'}
             </p>
-            <Button onClick={() => navigate('/referrals')}>浏览内推岗位</Button>
+            {filter === 'all' && !searchQuery && (
+              <Button onClick={() => navigate('/referrals')}>浏览内推岗位</Button>
+            )}
           </Card>
         ) : (
           <div className="space-y-4">
             {filteredApplications.map((application, index) => {
               const referral = application.referral;
+              const resume = application.resume;
               const status = statusConfig[application.status];
               const StatusIcon = status.icon;
 
@@ -128,7 +187,7 @@ export default function Applications() {
                             }}
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <h3 className="font-semibold text-gray-900">{referral.jobTitle}</h3>
                               <Badge variant={status.color as 'warning' | 'success' | 'danger' | 'default'}>
                                 <StatusIcon className="w-3 h-3 mr-1" />
@@ -160,6 +219,20 @@ export default function Applications() {
                     <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-[#1E3A5F]">
                       <Clock className="w-4 h-4" />
                       预约沟通时间：{formatDate(application.scheduledTime)}
+                    </div>
+                  )}
+
+                  {resume && (
+                    <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-2 text-sm text-gray-600">
+                      <FileText className="w-4 h-4" />
+                      使用简历：
+                      <span className="font-medium">{resume.title}</span>
+                      {resume.fileType && (
+                        <Badge variant="default" size="sm">{getFileExtension(resume.fileType)}</Badge>
+                      )}
+                      {resume.fileSize && (
+                        <span className="text-gray-400">({formatFileSize(resume.fileSize)})</span>
+                      )}
                     </div>
                   )}
 

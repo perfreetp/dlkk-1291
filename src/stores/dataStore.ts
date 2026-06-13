@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { Notification, Article, Comment, Block, User } from '@/types';
+import { Notification, Article, Comment, Block } from '@/types';
 import { notifications as mockNotifications, articles as mockArticles, users } from '@/data/mockData';
 
 interface NotificationState {
@@ -8,8 +8,8 @@ interface NotificationState {
   markAsRead: (id: string) => void;
   markAllAsRead: (userId: string) => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => void;
-  getNotificationsByUser: (userId: string) => Notification[];
-  getUnreadCountByUser: (userId: string) => number;
+  getNotificationsByUser: (userId: string, blockedUserIds?: string[]) => Notification[];
+  getUnreadCountByUser: (userId: string, blockedUserIds?: string[]) => number;
 }
 
 export const useNotificationStore = create<NotificationState>()(
@@ -45,12 +45,16 @@ export const useNotificationStore = create<NotificationState>()(
         }));
       },
 
-      getNotificationsByUser: (userId) => {
-        return get().notifications.filter((n) => n.userId === userId);
+      getNotificationsByUser: (userId, blockedUserIds = []) => {
+        return get().notifications.filter(
+          (n) => n.userId === userId && !blockedUserIds.includes(n.userId)
+        );
       },
 
-      getUnreadCountByUser: (userId) => {
-        return get().notifications.filter((n) => n.userId === userId && !n.isRead).length;
+      getUnreadCountByUser: (userId, blockedUserIds = []) => {
+        return get().notifications.filter(
+          (n) => n.userId === userId && !n.isRead && !blockedUserIds.includes(n.userId)
+        ).length;
       },
     }),
     {
@@ -144,7 +148,7 @@ export const useArticleStore = create<ArticleState>()((set, get) => ({
 
 interface BlockState {
   blocks: Block[];
-  addBlock: (userId: string, blockedUserId: string) => void;
+  addBlock: (userId: string, blockedUserId: string, notificationIds?: string[]) => void;
   removeBlock: (id: string) => void;
   isBlocked: (userId: string, blockedUserId: string) => boolean;
   getBlocksByUser: (userId: string) => Block[];
@@ -156,7 +160,7 @@ export const useBlockStore = create<BlockState>()(
     (set, get) => ({
       blocks: [],
 
-      addBlock: (userId, blockedUserId) => {
+      addBlock: (userId, blockedUserId, notificationIds = []) => {
         if (get().isBlocked(userId, blockedUserId)) return;
         
         const blockedUser = users.find((u) => u.id === blockedUserId);
@@ -165,6 +169,7 @@ export const useBlockStore = create<BlockState>()(
           userId,
           blockedUserId,
           blockedUser,
+          hiddenNotificationIds: notificationIds,
           createdAt: new Date().toISOString(),
         };
         set((state) => ({

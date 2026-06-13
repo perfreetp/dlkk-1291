@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { MapPin, Clock, Users, Briefcase, Calendar, Share2, Heart, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
+import { MapPin, Clock, Users, Briefcase, Share2, Heart, ArrowLeft, CheckCircle, AlertCircle, FileText, Download, Upload } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -49,6 +49,20 @@ export default function JobDetail() {
     });
   };
 
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileExtension = (fileType?: string) => {
+    if (!fileType) return '';
+    if (fileType.includes('pdf')) return 'PDF';
+    if (fileType.includes('word') || fileType.includes('document')) return 'DOCX';
+    return '';
+  };
+
   const handleToggleFavorite = () => {
     toggleFavorite(referral.id);
   };
@@ -70,7 +84,13 @@ export default function JobDetail() {
       navigate('/login');
       return;
     }
-    setSelectedResume(defaultResume?.id || '');
+    if (userResumes.length === 0) {
+      if (window.confirm('您还没有上传简历，请先上传简历再申请。是否前往简历管理？')) {
+        navigate('/profile/resumes');
+      }
+      return;
+    }
+    setSelectedResume(defaultResume?.id || userResumes[0].id);
     setScheduledTime('');
     setNotes('');
     setShowApplyModal(true);
@@ -98,6 +118,8 @@ export default function JobDetail() {
     setIsApplied(true);
     setShowApplyModal(false);
   };
+
+  const selectedResumeInfo = resumes.find((r) => r.id === selectedResume);
 
   return (
     <div className="min-h-[calc(100vh-64px)] py-8 px-4">
@@ -234,42 +256,62 @@ export default function JobDetail() {
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">选择简历</label>
-                {userResumes.length === 0 ? (
-                  <div className="text-center p-4 border border-dashed border-gray-200 rounded-lg">
-                    <p className="text-gray-500 mb-2">您还没有上传简历</p>
-                    <Button variant="outline" size="sm" onClick={() => navigate('/profile/resumes')}>
-                      上传简历
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {userResumes.map((resume) => (
-                      <label
-                        key={resume.id}
-                        className={`flex items-center gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedResume === resume.id
-                            ? 'border-[#1E3A5F] bg-[#1E3A5F]/5'
-                            : 'border-gray-200 hover:border-gray-300'
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name="resume"
-                          value={resume.id}
-                          checked={selectedResume === resume.id}
-                          onChange={(e) => setSelectedResume(e.target.value)}
-                          className="w-4 h-4 text-[#1E3A5F]"
-                        />
-                        <div>
+                <div className="space-y-2">
+                  {userResumes.map((resume) => (
+                    <label
+                      key={resume.id}
+                      className={`flex items-start gap-3 p-3 border rounded-lg cursor-pointer transition-colors ${
+                        selectedResume === resume.id
+                          ? 'border-[#1E3A5F] bg-[#1E3A5F]/5'
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="resume"
+                        value={resume.id}
+                        checked={selectedResume === resume.id}
+                        onChange={(e) => setSelectedResume(e.target.value)}
+                        className="w-4 h-4 text-[#1E3A5F] mt-0.5"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <FileText className="w-4 h-4 text-gray-400" />
                           <p className="font-medium text-gray-900">{resume.title}</p>
                           {resume.isDefault && (
-                            <span className="text-xs text-[#1E3A5F]">默认简历</span>
+                            <Badge variant="success" size="sm">默认</Badge>
+                          )}
+                          {resume.fileType && (
+                            <Badge variant="default" size="sm">
+                              {getFileExtension(resume.fileType)}
+                            </Badge>
                           )}
                         </div>
-                      </label>
-                    ))}
-                  </div>
-                )}
+                        {resume.fileName && (
+                          <p className="text-sm text-gray-500">
+                            {resume.fileName}
+                            {resume.fileSize && ` · ${formatFileSize(resume.fileSize)}`}
+                          </p>
+                        )}
+                        {resume.fileUrl && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                window.open(resume.fileUrl, '_blank');
+                              }}
+                              className="text-xs text-[#1E3A5F] hover:underline flex items-center gap-1"
+                            >
+                              <Download className="w-3 h-3" />
+                              预览
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
               </div>
 
               <div>

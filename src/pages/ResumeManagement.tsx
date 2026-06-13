@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Star, Trash2, ArrowLeft } from 'lucide-react';
+import { Upload, FileText, Star, Trash2, ArrowLeft, Download, Eye } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -50,14 +50,13 @@ export default function ResumeManagement() {
   const handleAddResume = () => {
     if (!newResumeTitle.trim()) return;
 
-    const fileName = selectedFile
-      ? `${user!.id}/${Date.now()}_${selectedFile.name}`
-      : `${user!.id}/${Date.now()}.pdf`;
-
     addResume({
       userId: user!.id,
       title: newResumeTitle,
-      fileUrl: `/resumes/${fileName}`,
+      fileUrl: selectedFile ? URL.createObjectURL(selectedFile) : `/resumes/${user!.id}/${Date.now()}.pdf`,
+      fileName: selectedFile?.name,
+      fileSize: selectedFile?.size,
+      fileType: selectedFile?.type,
       isDefault: userResumes.length === 0,
     });
 
@@ -80,9 +79,34 @@ export default function ResumeManagement() {
   };
 
   const handleDelete = (resumeId: string) => {
-    if (window.confirm('确定要删除这个简历吗？')) {
-      deleteResume(resumeId);
+    const resumeToDelete = userResumes.find((r) => r.id === resumeId);
+    const wasDefault = resumeToDelete?.isDefault;
+    
+    deleteResume(resumeId);
+    
+    if (wasDefault && userResumes.length > 1) {
+      const remainingResumes = userResumes.filter((r) => r.id !== resumeId);
+      if (remainingResumes.length > 0) {
+        const latestResume = remainingResumes.sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )[0];
+        updateResume(latestResume.id, { isDefault: true });
+      }
     }
+  };
+
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return '';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileExtension = (fileType?: string) => {
+    if (!fileType) return '';
+    if (fileType.includes('pdf')) return 'PDF';
+    if (fileType.includes('word') || fileType.includes('document')) return 'DOCX';
+    return '';
   };
 
   const formatDate = (dateStr: string) => {
@@ -131,13 +155,13 @@ export default function ResumeManagement() {
           <div className="space-y-4">
             {userResumes.map((resume) => (
               <Card key={resume.id} className="p-5">
-                <div className="flex items-center gap-4">
-                  <div className="p-3 bg-gray-100 rounded-lg">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-gray-100 rounded-lg flex-shrink-0">
                     <FileText className="w-6 h-6 text-gray-600" />
                   </div>
 
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <h3 className="font-semibold text-gray-900">{resume.title}</h3>
                       {resume.isDefault && (
                         <Badge variant="success" size="sm">
@@ -145,11 +169,50 @@ export default function ResumeManagement() {
                           默认
                         </Badge>
                       )}
+                      {resume.fileType && (
+                        <Badge variant="default" size="sm">
+                          {getFileExtension(resume.fileType)}
+                        </Badge>
+                      )}
                     </div>
-                    <p className="text-sm text-gray-500">上传时间：{formatDate(resume.createdAt)}</p>
+                    
+                    <div className="text-sm text-gray-500 space-y-0.5">
+                      <p>上传时间：{formatDate(resume.createdAt)}</p>
+                      {resume.fileName && (
+                        <>
+                          <p>文件名：{resume.fileName}</p>
+                          {resume.fileSize && <p>大小：{formatFileSize(resume.fileSize)}</p>}
+                        </>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {resume.fileUrl && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="预览"
+                          onClick={() => window.open(resume.fileUrl, '_blank')}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          title="下载"
+                          onClick={() => {
+                            const link = document.createElement('a');
+                            link.href = resume.fileUrl;
+                            link.download = resume.fileName || 'resume.pdf';
+                            link.click();
+                          }}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </>
+                    )}
                     {!resume.isDefault && (
                       <Button
                         variant="ghost"
@@ -194,7 +257,7 @@ export default function ResumeManagement() {
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept=".pdf,.doc,.docx"
+                  accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                   onChange={handleFileChange}
                   className="hidden"
                 />
@@ -205,7 +268,10 @@ export default function ResumeManagement() {
                   {selectedFile ? (
                     <div className="flex items-center justify-center gap-2">
                       <FileText className="w-6 h-6 text-[#1E3A5F]" />
-                      <span className="text-sm font-medium text-gray-700">{selectedFile.name}</span>
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-gray-700">{selectedFile.name}</p>
+                        <p className="text-xs text-gray-500">{formatFileSize(selectedFile.size)}</p>
+                      </div>
                     </div>
                   ) : (
                     <>

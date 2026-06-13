@@ -11,7 +11,7 @@ export default function Notifications() {
   const navigate = useNavigate();
   const { notifications, markAsRead, markAllAsRead, getNotificationsByUser, getUnreadCountByUser } = useNotificationStore();
   const { user, isAuthenticated } = useAuthStore();
-  const { getBlockedUserIds } = useBlockStore();
+  const { getBlockedUserIds, getBlocksByUser } = useBlockStore();
   const [filter, setFilter] = useState<string>('all');
 
   if (!isAuthenticated) {
@@ -27,14 +27,22 @@ export default function Notifications() {
   }
 
   const blockedUserIds = getBlockedUserIds(user!.id);
+  const userBlocks = getBlocksByUser(user!.id);
+  const hiddenNotificationIds = userBlocks.flatMap((b) => b.hiddenNotificationIds);
+
   const allUserNotifications = getNotificationsByUser(user!.id).filter((n) => {
-    const referral = n.link?.includes('/referrals/') ? n.link.split('/').pop() : null;
-    return !blockedUserIds.includes(n.userId);
+    if (n.userId === user!.id) {
+      const isFromBlockedUser = blockedUserIds.includes(n.userId);
+      return !isFromBlockedUser;
+    }
+    return false;
   });
 
+  const visibleNotifications = allUserNotifications.filter((n) => !hiddenNotificationIds.includes(n.id));
+
   const filteredNotifications = filter === 'all'
-    ? allUserNotifications
-    : allUserNotifications.filter((n) => {
+    ? visibleNotifications
+    : visibleNotifications.filter((n) => {
         if (filter === 'deadline') return n.type === 'deadline';
         if (filter === 'application') return n.type === 'application';
         if (filter === 'system') return n.type === 'system' || n.type === 'new_referral';
