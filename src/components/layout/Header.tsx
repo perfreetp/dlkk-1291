@@ -7,8 +7,10 @@ import { useNotificationStore } from '@/stores/dataStore';
 export default function Header() {
   const location = useLocation();
   const { isAuthenticated, user, logout } = useAuthStore();
-  const { unreadCount } = useNotificationStore();
+  const { getUnreadCountByUser } = useNotificationStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const unreadCount = isAuthenticated && user ? getUnreadCountByUser(user.id) : 0;
 
   const navItems = [
     { path: '/', label: '首页', icon: Home },

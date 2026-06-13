@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Shield, User, Trash2, ArrowLeft, UserX } from 'lucide-react';
+import { Shield, UserX, ArrowLeft, Check, X, Search } from 'lucide-react';
 import Card from '@/components/common/Card';
+import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
 import { useBlockStore } from '@/stores/dataStore';
 import { useAuthStore } from '@/stores/authStore';
+import { users } from '@/data/mockData';
 
 export default function BlockManagement() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { blocks, removeBlock } = useBlockStore();
+  const { blocks, addBlock, removeBlock, isBlocked } = useBlockStore();
   const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   if (!isAuthenticated) {
     return (
@@ -25,6 +28,23 @@ export default function BlockManagement() {
   }
 
   const userBlocks = blocks.filter((b) => b.userId === user?.id);
+  const availableUsers = users.filter(
+    (u) => u.id !== user?.id && !isBlocked(user!.id, u.id)
+  );
+
+  const filteredUsers = searchQuery
+    ? availableUsers.filter(
+        (u) =>
+          u.nickname.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          u.email.toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : availableUsers;
+
+  const handleBlockUser = (userId: string) => {
+    addBlock(user!.id, userId);
+    setShowAddModal(false);
+    setSearchQuery('');
+  };
 
   const handleRemoveBlock = (blockId: string) => {
     if (window.confirm('确定要取消屏蔽吗？')) {
@@ -67,7 +87,8 @@ export default function BlockManagement() {
               <UserX className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-semibold text-gray-900 mb-2">暂无屏蔽</h3>
-            <p className="text-gray-500">您还没有屏蔽任何联系人</p>
+            <p className="text-gray-500 mb-6">您还没有屏蔽任何联系人</p>
+            <Button onClick={() => setShowAddModal(true)}>添加屏蔽</Button>
           </Card>
         ) : (
           <div className="space-y-3">
@@ -97,6 +118,68 @@ export default function BlockManagement() {
           </div>
         )}
       </div>
+
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <Card className="w-full max-w-md p-6 animate-scale-in">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-gray-900">添加屏蔽</h2>
+              <button
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSearchQuery('');
+                }}
+                className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5 text-gray-500" />
+              </button>
+            </div>
+
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜索用户名或邮箱..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#1E3A5F] focus:ring-2 focus:ring-[#1E3A5F]/20 transition-colors text-gray-900"
+              />
+            </div>
+
+            <div className="max-h-64 overflow-y-auto space-y-2">
+              {filteredUsers.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {searchQuery ? '没有找到匹配的用户' : '没有可屏蔽的用户'}
+                </div>
+              ) : (
+                filteredUsers.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <img
+                      src={u.avatar}
+                      alt={u.nickname}
+                      className="w-10 h-10 rounded-full"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900">{u.nickname}</p>
+                      <p className="text-sm text-gray-500 truncate">{u.email}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleBlockUser(u.id)}
+                    >
+                      屏蔽
+                    </Button>
+                  </div>
+                ))
+              )}
+            </div>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

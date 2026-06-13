@@ -1,16 +1,17 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Bell, Clock, Briefcase, CheckCircle, AlertCircle, Users, CheckCheck, Trash2 } from 'lucide-react';
+import { Bell, Clock, Briefcase, Users, CheckCheck } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
-import { useNotificationStore } from '@/stores/dataStore';
+import { useNotificationStore, useBlockStore } from '@/stores/dataStore';
 import { useAuthStore } from '@/stores/authStore';
 
 export default function Notifications() {
   const navigate = useNavigate();
-  const { notifications, markAsRead, markAllAsRead, unreadCount } = useNotificationStore();
+  const { notifications, markAsRead, markAllAsRead, getNotificationsByUser, getUnreadCountByUser } = useNotificationStore();
   const { user, isAuthenticated } = useAuthStore();
+  const { getBlockedUserIds } = useBlockStore();
   const [filter, setFilter] = useState<string>('all');
 
   if (!isAuthenticated) {
@@ -25,16 +26,22 @@ export default function Notifications() {
     );
   }
 
-  const userNotifications = notifications.filter((n) => n.userId === user?.id);
+  const blockedUserIds = getBlockedUserIds(user!.id);
+  const allUserNotifications = getNotificationsByUser(user!.id).filter((n) => {
+    const referral = n.link?.includes('/referrals/') ? n.link.split('/').pop() : null;
+    return !blockedUserIds.includes(n.userId);
+  });
 
   const filteredNotifications = filter === 'all'
-    ? userNotifications
-    : userNotifications.filter((n) => {
+    ? allUserNotifications
+    : allUserNotifications.filter((n) => {
         if (filter === 'deadline') return n.type === 'deadline';
         if (filter === 'application') return n.type === 'application';
         if (filter === 'system') return n.type === 'system' || n.type === 'new_referral';
         return true;
       });
+
+  const unreadCount = getUnreadCountByUser(user!.id);
 
   const getTypeIcon = (type: string) => {
     switch (type) {
@@ -43,7 +50,7 @@ export default function Notifications() {
       case 'application':
         return <Briefcase className="w-5 h-5" />;
       case 'system':
-        return <AlertCircle className="w-5 h-5" />;
+        return <Bell className="w-5 h-5" />;
       case 'new_referral':
         return <Users className="w-5 h-5" />;
       default:
@@ -100,6 +107,10 @@ export default function Notifications() {
     }
   };
 
+  const handleMarkAllAsRead = () => {
+    markAllAsRead(user!.id);
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] py-8 px-4">
       <div className="max-w-2xl mx-auto">
@@ -111,7 +122,7 @@ export default function Notifications() {
             </p>
           </div>
           {unreadCount > 0 && (
-            <Button variant="ghost" onClick={markAllAsRead}>
+            <Button variant="ghost" onClick={handleMarkAllAsRead}>
               <CheckCheck className="w-4 h-4 mr-2" />
               全部标为已读
             </Button>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Briefcase, Clock, CheckCircle, XCircle, AlertCircle, FileText } from 'lucide-react';
+import { Briefcase, Clock, CheckCircle, XCircle } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -10,7 +10,7 @@ import { useReferralStore } from '@/stores/referralStore';
 export default function Applications() {
   const navigate = useNavigate();
   const { user, isAuthenticated } = useAuthStore();
-  const { applications, cancelApplication } = useReferralStore();
+  const { applications, cancelApplication, referrals } = useReferralStore();
   const [filter, setFilter] = useState<string>('all');
 
   if (!isAuthenticated) {
@@ -25,7 +25,12 @@ export default function Applications() {
     );
   }
 
-  const userApplications = applications.filter((app) => app.applicantId === user?.id);
+  const userApplications = applications
+    .filter((app) => app.applicantId === user?.id)
+    .map((app) => ({
+      ...app,
+      referral: app.referral || referrals.find((r) => r.id === app.referralId),
+    }));
 
   const filteredApplications = filter === 'all'
     ? userApplications
@@ -126,6 +131,7 @@ export default function Applications() {
                             <div className="flex items-center gap-2 mb-1">
                               <h3 className="font-semibold text-gray-900">{referral.jobTitle}</h3>
                               <Badge variant={status.color as 'warning' | 'success' | 'danger' | 'default'}>
+                                <StatusIcon className="w-3 h-3 mr-1" />
                                 {status.label}
                               </Badge>
                             </div>

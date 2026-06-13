@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload, FileText, Star, Trash2, ArrowLeft, Check } from 'lucide-react';
+import { Upload, FileText, Star, Trash2, ArrowLeft } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
@@ -14,6 +14,8 @@ export default function ResumeManagement() {
   const { resumes, addResume, updateResume, deleteResume } = useReferralStore();
   const [showAddModal, setShowAddModal] = useState(false);
   const [newResumeTitle, setNewResumeTitle] = useState('');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!isAuthenticated) {
     return (
@@ -29,18 +31,42 @@ export default function ResumeManagement() {
 
   const userResumes = resumes.filter((r) => r.userId === user?.id);
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validTypes = ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+      if (validTypes.includes(file.type)) {
+        setSelectedFile(file);
+        if (!newResumeTitle) {
+          const fileName = file.name.replace(/\.[^/.]+$/, '');
+          setNewResumeTitle(fileName);
+        }
+      } else {
+        alert('请选择 PDF 或 Word 文件');
+      }
+    }
+  };
+
   const handleAddResume = () => {
     if (!newResumeTitle.trim()) return;
+
+    const fileName = selectedFile
+      ? `${user!.id}/${Date.now()}_${selectedFile.name}`
+      : `${user!.id}/${Date.now()}.pdf`;
 
     addResume({
       userId: user!.id,
       title: newResumeTitle,
-      fileUrl: `/resumes/${user!.id}/${Date.now()}.pdf`,
+      fileUrl: `/resumes/${fileName}`,
       isDefault: userResumes.length === 0,
     });
 
     setNewResumeTitle('');
+    setSelectedFile(null);
     setShowAddModal(false);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleSetDefault = (resumeId: string) => {
@@ -129,6 +155,7 @@ export default function ResumeManagement() {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleSetDefault(resume.id)}
+                        title="设为默认"
                       >
                         <Star className="w-4 h-4" />
                       </Button>
@@ -162,14 +189,40 @@ export default function ResumeManagement() {
                 onChange={(e) => setNewResumeTitle(e.target.value)}
               />
 
-              <div className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-[#1E3A5F]/50 transition-colors cursor-pointer">
-                <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">点击选择文件</p>
-                <p className="text-xs text-gray-400 mt-1">支持 PDF、Word 格式，最大 10MB</p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">选择文件</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 text-center hover:border-[#1E3A5F]/50 transition-colors cursor-pointer"
+                >
+                  {selectedFile ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <FileText className="w-6 h-6 text-[#1E3A5F]" />
+                      <span className="text-sm font-medium text-gray-700">{selectedFile.name}</span>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                      <p className="text-sm text-gray-500">点击选择文件</p>
+                    </>
+                  )}
+                </div>
+                <p className="mt-1.5 text-xs text-gray-400">支持 PDF、Word 格式，最大 10MB</p>
               </div>
 
               <div className="flex gap-3">
-                <Button variant="outline" className="flex-1" onClick={() => setShowAddModal(false)}>
+                <Button variant="outline" className="flex-1" onClick={() => {
+                  setShowAddModal(false);
+                  setNewResumeTitle('');
+                  setSelectedFile(null);
+                }}>
                   取消
                 </Button>
                 <Button className="flex-1" onClick={handleAddResume} disabled={!newResumeTitle.trim()}>

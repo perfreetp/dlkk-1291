@@ -12,11 +12,12 @@ import { useNotificationStore } from '@/stores/dataStore';
 export default function JobDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getReferralById, favorites, toggleFavorite, addApplication, resumes } = useReferralStore();
+  const { getReferralById, favorites, toggleFavorite, addApplication, resumes, hasApplied } = useReferralStore();
   const { user, isAuthenticated } = useAuthStore();
   const { addNotification } = useNotificationStore();
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [selectedResume, setSelectedResume] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
   const [notes, setNotes] = useState('');
   const [isApplied, setIsApplied] = useState(false);
 
@@ -38,6 +39,7 @@ export default function JobDetail() {
   const isFavorite = favorites.includes(referral.id);
   const userResumes = resumes.filter((r) => r.userId === user?.id);
   const defaultResume = userResumes.find((r) => r.isDefault) || userResumes[0];
+  const alreadyApplied = isAuthenticated && hasApplied(user!.id, referral.id);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('zh-CN', {
@@ -69,6 +71,8 @@ export default function JobDetail() {
       return;
     }
     setSelectedResume(defaultResume?.id || '');
+    setScheduledTime('');
+    setNotes('');
     setShowApplyModal(true);
   };
 
@@ -79,6 +83,7 @@ export default function JobDetail() {
       referralId: referral.id,
       applicantId: user!.id,
       resumeId: selectedResume,
+      scheduledTime: scheduledTime || undefined,
       notes,
     });
 
@@ -204,10 +209,10 @@ export default function JobDetail() {
               <Button
                 size="lg"
                 onClick={handleApply}
-                disabled={isApplied || referral.status !== 'active'}
+                disabled={alreadyApplied || referral.status !== 'active'}
                 className="min-w-[200px]"
               >
-                {isApplied ? (
+                {alreadyApplied ? (
                   <>
                     <CheckCircle className="w-5 h-5 mr-2" />
                     已申请
@@ -265,6 +270,19 @@ export default function JobDetail() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  预约沟通时间（选填）
+                </label>
+                <input
+                  type="datetime-local"
+                  value={scheduledTime}
+                  onChange={(e) => setScheduledTime(e.target.value)}
+                  className="w-full px-4 py-2.5 rounded-lg border border-gray-200 focus:border-[#1E3A5F] focus:ring-2 focus:ring-[#1E3A5F]/20 transition-colors text-gray-900"
+                />
+                <p className="mt-1.5 text-sm text-gray-500">选择您方便沟通的时间，推荐人可以看到</p>
               </div>
 
               <Textarea

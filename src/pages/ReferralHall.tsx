@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Search, Filter, MapPin, Clock, Users, X, ChevronDown } from 'lucide-react';
+import { Search, Filter, MapPin, Clock, Users, X } from 'lucide-react';
 import Card from '@/components/common/Card';
 import Badge from '@/components/common/Badge';
 import Button from '@/components/common/Button';
 import Select from '@/components/forms/Select';
-import Input from '@/components/forms/Input';
 import { useReferralStore } from '@/stores/referralStore';
+import { useAuthStore } from '@/stores/authStore';
+import { useBlockStore } from '@/stores/dataStore';
 import { cities, jobTypes, grades } from '@/data/mockData';
 
 export default function ReferralHall() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilter, resetFilters, getFilteredReferrals } = useReferralStore();
+  const { user, isAuthenticated } = useAuthStore();
+  const { getBlockedUserIds } = useBlockStore();
   const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
@@ -22,7 +25,11 @@ export default function ReferralHall() {
     }
   }, [searchParams, setFilter]);
 
-  const filteredReferrals = getFilteredReferrals();
+  const blockedUserIds = isAuthenticated && user ? getBlockedUserIds(user.id) : [];
+  
+  const filteredReferrals = getFilteredReferrals().filter(
+    (referral) => !blockedUserIds.includes(referral.posterId)
+  );
 
   const handleSearch = (value: string) => {
     setFilter('keyword', value);

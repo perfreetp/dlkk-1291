@@ -1,55 +1,63 @@
 import { create } from 'zustand';
-import { Notification, Article, Comment, Block } from '@/types';
+import { persist } from 'zustand/middleware';
+import { Notification, Article, Comment, Block, User } from '@/types';
 import { notifications as mockNotifications, articles as mockArticles, users } from '@/data/mockData';
 
 interface NotificationState {
   notifications: Notification[];
-  unreadCount: number;
   markAsRead: (id: string) => void;
-  markAllAsRead: () => void;
+  markAllAsRead: (userId: string) => void;
   addNotification: (notification: Omit<Notification, 'id' | 'createdAt' | 'isRead'>) => void;
   getNotificationsByUser: (userId: string) => Notification[];
+  getUnreadCountByUser: (userId: string) => number;
 }
 
-export const useNotificationStore = create<NotificationState>((set, get) => ({
-  notifications: mockNotifications,
-  unreadCount: mockNotifications.filter((n) => !n.isRead).length,
+export const useNotificationStore = create<NotificationState>()(
+  persist(
+    (set, get) => ({
+      notifications: mockNotifications,
 
-  markAsRead: (id) => {
-    set((state) => ({
-      notifications: state.notifications.map((n) =>
-        n.id === id ? { ...n, isRead: true } : n
-      ),
-      unreadCount: state.notifications.filter(
-        (n) => !n.isRead && n.id !== id
-      ).length,
-    }));
-  },
+      markAsRead: (id) => {
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.id === id ? { ...n, isRead: true } : n
+          ),
+        }));
+      },
 
-  markAllAsRead: () => {
-    set((state) => ({
-      notifications: state.notifications.map((n) => ({ ...n, isRead: true })),
-      unreadCount: 0,
-    }));
-  },
+      markAllAsRead: (userId) => {
+        set((state) => ({
+          notifications: state.notifications.map((n) =>
+            n.userId === userId ? { ...n, isRead: true } : n
+          ),
+        }));
+      },
 
-  addNotification: (data) => {
-    const newNotification: Notification = {
-      ...data,
-      id: Date.now().toString(),
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    };
-    set((state) => ({
-      notifications: [newNotification, ...state.notifications],
-      unreadCount: state.unreadCount + 1,
-    }));
-  },
+      addNotification: (data) => {
+        const newNotification: Notification = {
+          ...data,
+          id: Date.now().toString(),
+          isRead: false,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          notifications: [newNotification, ...state.notifications],
+        }));
+      },
 
-  getNotificationsByUser: (userId) => {
-    return get().notifications.filter((n) => n.userId === userId);
-  },
-}));
+      getNotificationsByUser: (userId) => {
+        return get().notifications.filter((n) => n.userId === userId);
+      },
+
+      getUnreadCountByUser: (userId) => {
+        return get().notifications.filter((n) => n.userId === userId && !n.isRead).length;
+      },
+    }),
+    {
+      name: 'notification-storage',
+    }
+  )
+);
 
 interface ArticleState {
   articles: Article[];
@@ -62,7 +70,7 @@ interface ArticleState {
   getCommentsByArticle: (articleId: string) => Comment[];
 }
 
-export const useArticleStore = create<ArticleState>((set, get) => ({
+export const useArticleStore = create<ArticleState>()((set, get) => ({
   articles: mockArticles,
   comments: [
     {
@@ -139,34 +147,53 @@ interface BlockState {
   addBlock: (userId: string, blockedUserId: string) => void;
   removeBlock: (id: string) => void;
   isBlocked: (userId: string, blockedUserId: string) => boolean;
+  getBlocksByUser: (userId: string) => Block[];
+  getBlockedUserIds: (userId: string) => string[];
 }
 
-export const useBlockStore = create<BlockState>((set, get) => ({
-  blocks: [],
+export const useBlockStore = create<BlockState>()(
+  persist(
+    (set, get) => ({
+      blocks: [],
 
-  addBlock: (userId, blockedUserId) => {
-    const blockedUser = users.find((u) => u.id === blockedUserId);
-    const newBlock: Block = {
-      id: Date.now().toString(),
-      userId,
-      blockedUserId,
-      blockedUser,
-      createdAt: new Date().toISOString(),
-    };
-    set((state) => ({
-      blocks: [...state.blocks, newBlock],
-    }));
-  },
+      addBlock: (userId, blockedUserId) => {
+        if (get().isBlocked(userId, blockedUserId)) return;
+        
+        const blockedUser = users.find((u) => u.id === blockedUserId);
+        const newBlock: Block = {
+          id: Date.now().toString(),
+          userId,
+          blockedUserId,
+          blockedUser,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          blocks: [...state.blocks, newBlock],
+        }));
+      },
 
-  removeBlock: (id) => {
-    set((state) => ({
-      blocks: state.blocks.filter((b) => b.id !== id),
-    }));
-  },
+      removeBlock: (id) => {
+        set((state) => ({
+          blocks: state.blocks.filter((b) => b.id !== id),
+        }));
+      },
 
-  isBlocked: (userId, blockedUserId) => {
-    return get().blocks.some(
-      (b) => b.userId === userId && b.blockedUserId === blockedUserId
-    );
-  },
-}));
+      isBlocked: (userId, blockedUserId) => {
+        return get().blocks.some(
+          (b) => b.userId === userId && b.blockedUserId === blockedUserId
+        );
+      },
+
+      getBlocksByUser: (userId) => {
+        return get().blocks.filter((b) => b.userId === userId);
+      },
+
+      getBlockedUserIds: (userId) => {
+        return get().blocks.filter((b) => b.userId === userId).map((b) => b.blockedUserId);
+      },
+    }),
+    {
+      name: 'block-storage',
+    }
+  )
+);
